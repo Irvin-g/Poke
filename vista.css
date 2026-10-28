@@ -1,0 +1,29 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #f1f5f9;
+    text-align: center;
+    padding: 30px;
+}
+
+main {
+    max-width: 450px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+}
+
+input, button {
+    padding: 10px;
+    margin: 5px;
+}
+
+button {
+    cursor: pointer;
+}
+
+img {
+    width: 180px;
+    min-height: 100px;
+    object-fit: contain;
+}
