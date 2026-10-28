@@ -1,2 +1,2 @@
-# Pokedex
+# Poke
 Consumo pokemon
