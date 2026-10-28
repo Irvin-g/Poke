@@ -1,35 +1,422 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Pokédex</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="app.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Pokémon Explorer</title>
+  <meta name="description" content="Explorador de Pokémon con filtros y detalles.">
+
+  <!-- Bootstrap 5 -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+
+  <!-- Estilos propios -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Vue 3: framework progresivo -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js" defer></script>
+
+  <!-- Bootstrap JS: modales y componentes -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    defer
+  ></script>
+
+  <!-- Código de la aplicación -->
+  <script src="js/api.js" defer></script>
+  <script src="js/app.js" defer></script>
 </head>
+
 <body>
-    <main>
-        <h1>Mi Pokédex</h1>
+  <div id="app" v-cloak>
+    <header class="topbar">
+      <div class="container py-3 d-flex align-items-center justify-content-between">
+        <a href="#" class="brand" @click.prevent="resetFilters">
+          <span class="brand-icon">◉</span>
+          Pokémon Explorer
+        </a>
+        <span class="header-label">Pokédex · PokéAPI</span>
+      </div>
+    </header>
 
-        <form id="pokemon-form">
-            <input
-                id="pokemon-name"
-                type="text"
-                placeholder="Nombre o número"
-                required
+    <main class="container py-4 py-lg-5">
+      <section class="hero mb-4">
+        <div>
+          <span class="eyebrow">EXPLORADOR POKÉMON</span>
+          <h1>Encuentra tu Pokémon</h1>
+          <p class="text-secondary mb-0">
+            Busca por nombre, tipo o generación y descubre sus características.
+          </p>
+        </div>
+        <div class="hero-ball" aria-hidden="true">◉</div>
+      </section>
+
+      <!-- Búsqueda y filtros -->
+      <section class="filter-panel mb-4" aria-label="Filtros de búsqueda">
+        <div class="row g-3">
+          <div class="col-12 col-md-6 col-lg-4">
+            <label for="searchName" class="form-label">Buscar por nombre</label>
+            <div class="input-group">
+              <span class="input-group-text">⌕</span>
+              <input
+                id="searchName"
+                type="search"
+                class="form-control"
+                placeholder="Ej. Pikachu"
+                v-model.trim="search"
+                autocomplete="off"
+              >
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-lg-3">
+            <label for="filterType" class="form-label">Tipo</label>
+            <select id="filterType" class="form-select" v-model="selectedType">
+              <option value="">Todos los tipos</option>
+              <option
+                v-for="type in types"
+                :key="type"
+                :value="type"
+              >
+                {{ capitalize(type) }}
+              </option>
+            </select>
+          </div>
+
+          <div class="col-12 col-md-6 col-lg-3">
+            <label for="filterGeneration" class="form-label">Generación</label>
+            <select
+              id="filterGeneration"
+              class="form-select"
+              v-model="selectedGeneration"
             >
-            <button type="submit">Buscar</button>
-        </form>
+              <option value="">Todas las generaciones</option>
+              <option
+                v-for="generation in generations"
+                :key="generation.id"
+                :value="generation.id"
+              >
+                {{ generation.label }}
+              </option>
+            </select>
+          </div>
 
-        <p id="message"></p>
+          <div class="col-12 col-md-6 col-lg-2 d-flex align-items-end">
+            <button class="btn btn-outline-secondary w-100" @click="resetFilters">
+              Limpiar filtros
+            </button>
+          </div>
+        </div>
+      </section>
 
-        <section id="result" hidden>
-            <h2 id="name"></h2>
-            <img id="image" alt="Imagen del Pokémon">
-            <p id="type"></p>
-            <p id="height"></p>
-            <p id="weight"></p>
-        </section>
+      <!-- Resumen y cantidad por página -->
+      <section class="results-toolbar mb-3">
+        <div>
+          <h2 class="section-title">Listado de Pokémon</h2>
+          <p class="text-secondary small mb-0">
+            <template v-if="loading">
+              Cargando resultados...
+            </template>
+            <template v-else>
+              {{ filteredPokemon.length }} resultados encontrados
+            </template>
+          </p>
+        </div>
+
+        <div class="page-size-control">
+          <label for="pageSize" class="small text-secondary">Mostrar</label>
+          <select
+            id="pageSize"
+            class="form-select form-select-sm"
+            v-model.number="pageSize"
+          >
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Estados de carga y error -->
+      <div v-if="error" class="alert alert-danger" role="alert">
+        <strong>No se pudieron cargar los datos.</strong>
+        <p class="mb-2">{{ error }}</p>
+        <button class="btn btn-sm btn-outline-danger" @click="retry">
+          Intentar nuevamente
+        </button>
+      </div>
+
+      <div v-else-if="loading && visiblePokemon.length === 0" class="loading-panel">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="text-secondary mt-3 mb-0">Consultando PokéAPI...</p>
+      </div>
+
+      <!-- Tabla: no se muestran detalles completos hasta seleccionar un Pokémon -->
+      <section v-else class="table-card">
+        <div class="table-responsive">
+          <table class="table pokemon-table align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">Imagen</th>
+                <th scope="col">Nombre</th>
+                <th scope="col">Generación</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Altura</th>
+                <th scope="col">Peso</th>
+                <th scope="col">
+                  <span class="visually-hidden">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr v-for="pokemon in visiblePokemon" :key="pokemon.name">
+                <td>
+                  <div class="pokemon-thumb">
+                    <img
+                      v-if="pokemon.image"
+                      :src="pokemon.image"
+                      :alt="capitalize(pokemon.name)"
+                      loading="lazy"
+                    >
+                    <span v-else class="text-secondary small">—</span>
+                  </div>
+                </td>
+
+                <td>
+                  <button
+                    class="pokemon-name"
+                    @click="openDetails(pokemon)"
+                    :aria-label="'Ver detalles de ' + pokemon.name"
+                  >
+                    {{ capitalize(pokemon.name) }}
+                  </button>
+                  <div class="pokemon-number">
+                    #{{ String(pokemon.id).padStart(4, '0') }}
+                  </div>
+                </td>
+
+                <td>
+                  <span class="generation-pill">
+                    {{ pokemon.generation || '—' }}
+                  </span>
+                </td>
+
+                <td>
+                  <div class="type-list">
+                    <span
+                      v-for="type in pokemon.types"
+                      :key="type"
+                      class="type-badge"
+                      :class="'type-' + type"
+                    >
+                      {{ capitalize(type) }}
+                    </span>
+                    <span v-if="!pokemon.types?.length" class="text-secondary">—</span>
+                  </div>
+                </td>
+
+                <td>{{ pokemon.height !== null ? pokemon.height / 10 + ' m' : '—' }}</td>
+                <td>{{ pokemon.weight !== null ? pokemon.weight / 10 + ' kg' : '—' }}</td>
+
+                <td>
+                  <button
+                    class="btn btn-sm btn-outline-primary"
+                    @click="openDetails(pokemon)"
+                  >
+                    Ver
+                  </button>
+                </td>
+              </tr>
+
+              <tr v-if="!loading && visiblePokemon.length === 0">
+                <td colspan="7" class="empty-state">
+                  <div class="empty-icon">⌕</div>
+                  <h3>No hay resultados</h3>
+                  <p class="text-secondary mb-3">
+                    Prueba otro nombre, tipo o generación.
+                  </p>
+                  <button class="btn btn-outline-primary" @click="resetFilters">
+                    Mostrar todos
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Paginación -->
+        <div
+          v-if="filteredPokemon.length > 0"
+          class="pagination-bar"
+        >
+          <span class="small text-secondary">
+            Página {{ currentPage }} de {{ totalPages }}
+          </span>
+
+          <div class="d-flex gap-2">
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              :disabled="currentPage <= 1"
+              @click="currentPage--"
+            >
+              Anterior
+            </button>
+
+            <button
+              class="btn btn-sm btn-outline-primary"
+              :disabled="currentPage >= totalPages"
+              @click="currentPage++"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="page-footer mt-4">
+        <span>Datos proporcionados por PokéAPI.</span>
+        <span>Vue.js 3 · Bootstrap 5</span>
+      </footer>
     </main>
+
+    <!-- Modal: solo se llena cuando el usuario selecciona un resultado -->
+    <div
+      class="modal fade"
+      id="pokemonModal"
+      tabindex="-1"
+      aria-labelledby="modalTitle"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content detail-modal">
+          <div class="modal-header">
+            <div>
+              <span class="eyebrow">FICHA POKÉMON</span>
+              <h2 class="modal-title fs-4" id="modalTitle">
+                {{ selectedPokemon ? capitalize(selectedPokemon.name) : 'Detalles' }}
+              </h2>
+            </div>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Cerrar"
+            ></button>
+          </div>
+
+          <div class="modal-body">
+            <div v-if="detailLoading" class="text-center py-5">
+              <div class="spinner-border text-primary" role="status"></div>
+              <p class="text-secondary mt-3">Cargando ficha completa...</p>
+            </div>
+
+            <div v-else-if="detailError" class="alert alert-warning">
+              {{ detailError }}
+            </div>
+
+            <div v-else-if="detail" class="row g-4">
+              <div class="col-12 col-md-5">
+                <div class="detail-art">
+                  <img
+                    v-if="detail.image"
+                    :src="detail.image"
+                    :alt="capitalize(detail.name)"
+                  >
+                  <span class="detail-number">
+                    #{{ String(detail.id).padStart(4, '0') }}
+                  </span>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <span
+                    v-for="type in detail.types"
+                    :key="type"
+                    class="type-badge"
+                    :class="'type-' + type"
+                  >
+                    {{ capitalize(type) }}
+                  </span>
+                </div>
+
+                <p class="detail-description mt-3">
+                  {{ detail.description || 'Descripción no disponible.' }}
+                </p>
+              </div>
+
+              <div class="col-12 col-md-7">
+                <h3 class="detail-heading">Características</h3>
+
+                <div class="stat-grid">
+                  <div class="stat-box">
+                    <span>Altura</span>
+                    <strong>{{ detail.height / 10 }} m</strong>
+                  </div>
+                  <div class="stat-box">
+                    <span>Peso</span>
+                    <strong>{{ detail.weight / 10 }} kg</strong>
+                  </div>
+                  <div class="stat-box">
+                    <span>Generación</span>
+                    <strong>{{ detail.generation || '—' }}</strong>
+                  </div>
+                  <div class="stat-box">
+                    <span>Experiencia base</span>
+                    <strong>{{ detail.baseExperience ?? '—' }}</strong>
+                  </div>
+                  <div class="stat-box">
+                    <span>Hábitat</span>
+                    <strong>{{ detail.habitat || 'Desconocido' }}</strong>
+                  </div>
+                  <div class="stat-box">
+                    <span>Habilidades</span>
+                    <strong class="abilities">
+                      {{ detail.abilities.join(', ') || '—' }}
+                    </strong>
+                  </div>
+                </div>
+
+                <h3 class="detail-heading mt-4">Estadísticas base</h3>
+
+                <div
+                  v-for="stat in detail.stats"
+                  :key="stat.name"
+                  class="stat-row mb-3"
+                >
+                  <div class="d-flex justify-content-between mb-1">
+                    <span>{{ stat.name }}</span>
+                    <strong>{{ stat.value }}</strong>
+                  </div>
+                  <div
+                    class="progress"
+                    role="progressbar"
+                    :aria-label="stat.name"
+                    :aria-valuenow="stat.value"
+                    aria-valuemin="0"
+                    aria-valuemax="255"
+                  >
+                    <div
+                      class="progress-bar"
+                      :style="{ width: Math.min(stat.value / 255 * 100, 100) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
