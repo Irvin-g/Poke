@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Pokédex</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <main>
+        <h1>Mi Pokédex</h1>
+
+        <form id="pokemon-form">
+            <input
+                id="pokemon-name"
+                type="text"
+                placeholder="Nombre o número"
+                required
+            >
+            <button type="submit">Buscar</button>
+        </form>
+
+        <p id="message"></p>
+
+        <section id="result" hidden>
+            <h2 id="name"></h2>
+            <img id="image" alt="Imagen del Pokémon">
+            <p id="type"></p>
+            <p id="height"></p>
+            <p id="weight"></p>
+        </section>
+    </main>
+</body>
+</html>
